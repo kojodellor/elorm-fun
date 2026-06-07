@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/enums.dart';
 import '../../../data/models/patient_model.dart';
+import '../../../data/models/surgical_readiness_model.dart';
 import '../../../data/models/task_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../../data/repositories/patient_repository.dart';
@@ -12,6 +13,7 @@ import '../providers/patient_detail_providers.dart';
 import '../../../core/theme/app_animations.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../../clinical/providers/clinical_providers.dart';
+import '../../theatre/providers/theatre_readiness_providers.dart';
 
 class PatientDetailScreen extends ConsumerWidget {
   const PatientDetailScreen({super.key, required this.patientId});
@@ -358,25 +360,52 @@ class _Flag {
   final String value;
 }
 
-// ── Surgical readiness section ───────────────────────────────────────────────
+// ── Surgical readiness section — interactive ──────────────────────────────────
 
-class _SurgicalReadinessSection extends ConsumerWidget {
+class _SurgicalReadinessSection extends ConsumerStatefulWidget {
   const _SurgicalReadinessSection({required this.patientId});
-
   final String patientId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final readinessAsync =
-        ref.watch(patientReadinessProvider(patientId));
+  ConsumerState<_SurgicalReadinessSection> createState() =>
+      _SurgicalReadinessSectionState();
+}
+
+class _SurgicalReadinessSectionState
+    extends ConsumerState<_SurgicalReadinessSection> {
+  SurgicalReadinessModel? _local;
+  bool _saving = false;
+  bool _expanded = false;
+
+  Future<void> _toggle(SurgicalReadinessModel updated) async {
+    setState(() {
+      _local = updated;
+      _saving = true;
+    });
+    try {
+      await ref.read(readinessActionsProvider).updateReadiness(updated);
+      ref.invalidate(patientReadinessProvider(widget.patientId));
+      ref.invalidate(theatreReadinessListProvider);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final readinessAsync = ref.watch(patientReadinessProvider(widget.patientId));
 
     return readinessAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (_, __) => const SizedBox.shrink(),
-      data: (readiness) {
-        if (readiness == null) return const SizedBox.shrink();
+      data: (fetched) {
+        if (fetched == null) return const SizedBox.shrink();
 
-        final pct = readiness.readinessPct;
+        // Sync from provider only when not mid-save
+        if (!_saving) _local = fetched;
+        final r = _local ?? fetched;
+
+        final pct = r.readinessPct;
         final color = pct == 100
             ? AppColors.success
             : pct >= 70
@@ -384,86 +413,274 @@ class _SurgicalReadinessSection extends ConsumerWidget {
                 : AppColors.danger;
 
         return Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: r.isTheatreReady
+                  ? AppColors.success.withValues(alpha: 0.3)
+                  : AppColors.divider.withValues(alpha: 0.5),
+              width: r.isTheatreReady ? 1.5 : 0.5,
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _CardHeader(
-                    'Theatre Readiness', Icons.medical_services_rounded),
-                const SizedBox(height: 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Header
+              Row(children: [
+                const Icon(Icons.medical_services_rounded,
+                    size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text('Theatre Readiness',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                if (_saving)
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else if (r.isTheatreReady)
+                  const Icon(Icons.check_circle_rounded,
+                      color: AppColors.success, size: 18),
+              ]),
+              const SizedBox(height: 12),
 
-                // Progress bar
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: pct / 100,
-                          minHeight: 8,
-                          backgroundColor: AppColors.divider,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(color),
-                        ),
+              // Animated progress bar + percentage
+              Row(children: [
+                Expanded(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: pct / 100),
+                    duration: const Duration(milliseconds: 450),
+                    curve: Curves.easeOut,
+                    builder: (_, val, __) => ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: val,
+                        minHeight: 8,
+                        backgroundColor: AppColors.divider,
+                        valueColor: AlwaysStoppedAnimation(color),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '$pct%',
-                      style: TextStyle(
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: pct.toDouble()),
+                  duration: const Duration(milliseconds: 450),
+                  builder: (_, val, __) => Text(
+                    '${val.round()}%',
+                    style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
-                    ),
-                  ],
+                        color: color),
+                  ),
                 ),
+              ]),
 
-                if (readiness.blockingItems.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+              // ── Expanded checklist ─────────────────────────────
+              if (_expanded) ...[
+                const SizedBox(height: 14),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                _InlineTapRow(
+                  label: 'Full clerking completed',
+                  done: r.clerkingCompleted,
+                  onTap: () => _toggle(r.copyWith(clerkingCompleted: !r.clerkingCompleted)),
+                ),
+                _InlineTapRow(
+                  label: 'Anaesthetic review done',
+                  done: r.anaestheticReview,
+                  onTap: () => _toggle(r.copyWith(anaestheticReview: !r.anaestheticReview)),
+                ),
+                _InlineTapRow(
+                  label: 'Cross match (GXM) completed',
+                  done: r.gxmCompleted,
+                  onTap: () => _toggle(r.copyWith(gxmCompleted: !r.gxmCompleted)),
+                ),
+                _InlineTapRow(
+                  label: 'Consent signed',
+                  done: r.consentSigned,
+                  onTap: () => _toggle(r.copyWith(consentSigned: !r.consentSigned)),
+                ),
+                _InlineTapRow(
+                  label: 'Medications purchased',
+                  done: r.medicationsPurchased,
+                  onTap: () => _toggle(r.copyWith(medicationsPurchased: !r.medicationsPurchased)),
+                ),
+                _InlineTapRow(
+                  label: 'IV line set',
+                  done: r.ivLineSet,
+                  onTap: () => _toggle(r.copyWith(ivLineSet: !r.ivLineSet)),
+                ),
+                _InlineTapRow(
+                  label: 'X-match fee paid',
+                  done: r.xmatchFeePaid,
+                  onTap: () => _toggle(r.copyWith(xmatchFeePaid: !r.xmatchFeePaid)),
+                ),
+                _InlineTapRow(
+                  label: 'Blood confirmed in bank',
+                  done: r.bloodAvailableInBank,
+                  onTap: () => _toggle(r.copyWith(bloodAvailableInBank: !r.bloodAvailableInBank)),
+                ),
+                _InlineTapRow(
+                  label: 'Consultant approved',
+                  done: r.consultantApproved,
+                  onTap: () => _toggle(r.copyWith(consultantApproved: !r.consultantApproved)),
+                ),
+                // Blood units stepper
+                const SizedBox(height: 6),
+                Row(children: [
+                  Icon(
+                    r.bloodUnitsDonated >= r.bloodUnitsRequired
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 18,
+                    color: r.bloodUnitsDonated >= r.bloodUnitsRequired
+                        ? AppColors.success
+                        : AppColors.textMuted,
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text('Blood donated',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.textPrimary)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle_outline_rounded, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.textMuted,
+                    onPressed: r.bloodUnitsDonated > 0
+                        ? () => _toggle(r.copyWith(bloodUnitsDonated: r.bloodUnitsDonated - 1))
+                        : null,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      '${r.bloodUnitsDonated}/${r.bloodUnitsRequired}',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    color: AppColors.primary,
+                    onPressed: () => _toggle(r.copyWith(bloodUnitsDonated: r.bloodUnitsDonated + 1)),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => setState(() => _expanded = false),
+                  style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  child: const Text('Hide checklist',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ] else ...[
+                // ── Collapsed: outstanding list + expand button ──
+                if (r.blockingItems.isNotEmpty) ...[
+                  const SizedBox(height: 10),
                   const Text('Outstanding:',
                       style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary)),
-                  const SizedBox(height: 6),
-                  ...readiness.blockingItems.map(
+                  const SizedBox(height: 4),
+                  ...r.blockingItems.map(
                     (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.circle,
-                              size: 5, color: AppColors.danger),
-                          const SizedBox(width: 8),
-                          Text(item,
+                      padding: const EdgeInsets.only(bottom: 3),
+                      child: Row(children: [
+                        const Icon(Icons.circle,
+                            size: 5, color: AppColors.danger),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(item,
                               style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textPrimary)),
-                        ],
-                      ),
+                        ),
+                      ]),
                     ),
                   ),
                 ] else ...[
-                  const SizedBox(height: 10),
-                  const Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded,
-                          color: AppColors.success, size: 16),
-                      SizedBox(width: 6),
-                      Text('Patient is theatre-ready',
-                          style: TextStyle(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13)),
-                    ],
-                  ),
+                  const SizedBox(height: 8),
+                  const Row(children: [
+                    Icon(Icons.check_circle_rounded,
+                        color: AppColors.success, size: 16),
+                    SizedBox(width: 6),
+                    Text('Patient is theatre-ready',
+                        style: TextStyle(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13)),
+                  ]),
                 ],
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = true),
+                  child: const Row(children: [
+                    Icon(Icons.touch_app_outlined,
+                        size: 14, color: AppColors.primary),
+                    SizedBox(width: 4),
+                    Text('Tap to update checklist',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+                ),
               ],
-            ),
+            ]),
           ),
         );
       },
+    );
+  }
+}
+
+class _InlineTapRow extends StatelessWidget {
+  const _InlineTapRow(
+      {required this.label, required this.done, required this.onTap});
+  final String label;
+  final bool done;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+        child: Row(children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Icon(
+              done
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              key: ValueKey(done),
+              size: 18,
+              color: done ? AppColors.success : AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 13,
+                color: done ? AppColors.textMuted : AppColors.textPrimary,
+                decoration: done ? TextDecoration.lineThrough : null,
+              ),
+              child: Text(label),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }
