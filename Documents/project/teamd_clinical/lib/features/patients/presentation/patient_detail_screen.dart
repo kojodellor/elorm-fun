@@ -550,7 +550,10 @@ class _SurgicalReadinessSectionState
                     constraints: const BoxConstraints(),
                     color: AppColors.textMuted,
                     onPressed: r.bloodUnitsDonated > 0
-                        ? () => _toggle(r.copyWith(bloodUnitsDonated: r.bloodUnitsDonated - 1))
+                        ? () => _toggle(r.copyWith(
+                              bloodUnitsDonated: r.bloodUnitsDonated - 1,
+                              bloodAvailableInBank: (r.bloodUnitsDonated - 1) >= r.bloodUnitsRequired,
+                            ))
                         : null,
                   ),
                   Padding(
@@ -566,7 +569,10 @@ class _SurgicalReadinessSectionState
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                     color: AppColors.primary,
-                    onPressed: () => _toggle(r.copyWith(bloodUnitsDonated: r.bloodUnitsDonated + 1)),
+                    onPressed: () => _toggle(r.copyWith(
+                          bloodUnitsDonated: r.bloodUnitsDonated + 1,
+                          bloodAvailableInBank: (r.bloodUnitsDonated + 1) >= r.bloodUnitsRequired,
+                        )),
                   ),
                 ]),
                 const SizedBox(height: 6),

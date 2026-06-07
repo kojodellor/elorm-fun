@@ -300,7 +300,10 @@ class _ReadinessCardState extends ConsumerState<_ReadinessCard> {
               _BloodStepperRow(
                 required: r.bloodUnitsRequired,
                 donated: r.bloodUnitsDonated,
-                onChanged: (v) => _toggle(r.copyWith(bloodUnitsDonated: v)),
+                onChanged: (v) => _toggle(r.copyWith(
+                  bloodUnitsDonated: v,
+                  bloodAvailableInBank: v >= r.bloodUnitsRequired,
+                )),
               ),
             ]),
           ),
