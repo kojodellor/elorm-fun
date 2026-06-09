@@ -280,12 +280,6 @@ class _ReadinessCardState extends ConsumerState<_ReadinessCard> {
                 subtitle: 'Required: ${r.bloodUnitsRequired}  ·  Donated: ${r.bloodUnitsDonated}',
                 onTap: () => _toggle(r.copyWith(bloodAvailableInBank: !r.bloodAvailableInBank)),
               ),
-              _TapRow(
-                label: 'Consultant approved',
-                done: r.consultantApproved,
-                onTap: () => _toggle(r.copyWith(consultantApproved: !r.consultantApproved)),
-              ),
-
               // Hb — inline editable
               _HbInlineRow(
                 hbValue: r.hbValue,

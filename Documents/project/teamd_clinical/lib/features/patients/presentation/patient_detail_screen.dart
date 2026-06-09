@@ -521,11 +521,6 @@ class _SurgicalReadinessSectionState
                   done: r.bloodAvailableInBank,
                   onTap: () => _toggle(r.copyWith(bloodAvailableInBank: !r.bloodAvailableInBank)),
                 ),
-                _InlineTapRow(
-                  label: 'Consultant approved',
-                  done: r.consultantApproved,
-                  onTap: () => _toggle(r.copyWith(consultantApproved: !r.consultantApproved)),
-                ),
                 // Blood units stepper
                 const SizedBox(height: 6),
                 Row(children: [
