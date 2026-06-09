@@ -55,63 +55,70 @@ class ToolsHubScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Clinical Tools')),
-      body: ListView.separated(
+      body: GridView.builder(
         padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.05,
+        ),
         itemCount: tools.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, i) {
           final t = tools[i];
           return AnimatedMount(
-            delay: Duration(milliseconds: i * 55),
+            delay: Duration(milliseconds: i * 60),
             child: TapCard(
               onTap: () => context.push(t.route),
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: AppColors.divider.withOpacity(0.7),
-                    width: 0.5,
+                    color: t.color.withValues(alpha: 0.15),
+                    width: 1,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: t.color.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 48,
-                      height: 48,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: t.color.withOpacity(0.1),
+                        color: t.color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(t.icon, color: t.color, size: 24),
+                      child: Icon(t.icon, color: t.color, size: 22),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t.title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            t.subtitle,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
+                    const Spacer(),
+                    Text(
+                      t.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded,
-                        color: AppColors.textMuted, size: 20),
+                    const SizedBox(height: 3),
+                    Text(
+                      t.subtitle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
