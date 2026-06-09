@@ -500,11 +500,10 @@ class _FullClerkScreenState extends ConsumerState<FullClerkScreen>
       padding: const EdgeInsets.all(16),
       children: [
         if (!_isGynae) _buildObxHistory(),
-        if (_isGynae) ...[
-          _buildMenstrualHistory(),
-          _buildSexualHistory(),
-          _buildContraceptiveHistory(),
-        ],
+        // Menstrual, sexual & contraceptive history appear for ALL patients
+        _buildMenstrualHistory(),
+        _buildSexualHistory(),
+        _buildContraceptiveHistory(),
       ],
     );
   }
