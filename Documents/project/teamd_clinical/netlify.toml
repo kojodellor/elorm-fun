@@ -1,0 +1,19 @@
+[build]
+  command = """
+    git clone https://github.com/flutter/flutter.git --depth 1 -b stable $HOME/flutter &&
+    export PATH="$PATH:$HOME/flutter/bin" &&
+    flutter config --enable-web &&
+    flutter pub get &&
+    flutter build web --release \
+      --dart-define=SUPABASE_URL=$SUPABASE_URL \
+      --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+  """
+  publish = "build/web"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
